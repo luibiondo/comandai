@@ -16,6 +16,17 @@ coverage/
 .env.*
 !.env.example
 
+# Arquivos sensíveis: chaves, certificados, credenciais e assinatura de apps
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+key.properties
+credentials*.json
+service-account*.json
+
 # Logs
 npm-debug.log*
 *.log

@@ -89,7 +89,8 @@ Feito:
 
 ## 8. Convenções
 
-- Responder e comentar em português; identificadores de código em inglês ou no padrão já usado no repo (decidir ao modelar o banco).
+- Responder e comentar em português; identificadores de código (models, tabelas, variáveis) em inglês.
 - Sempre `npm` (`npm install`, `npm run ... -w apps/api`). Nunca `pnpm`.
-- Nunca versionar `.env`; usar `.env.example`.
-- Commits curtos, no padrão convencional (`chore:`, `feat:`, `fix:`).
+- Commits **em inglês**, curtos, no padrão convencional (`chore:`, `feat:`, `fix:`, `docs:`).
+- Sempre criar uma branch nova para cada funcionalidade e, após o push da branch, abrir PR para a `main`, pois ela é protegida.
+- **NUNCA** subir arquivos sensíveis como `.env` (usar `.env.example`). Manter o `.gitignore` cobrindo esses arquivos.

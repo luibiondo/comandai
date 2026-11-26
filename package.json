@@ -19,6 +19,11 @@
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "db:up": "docker compose up -d",
-    "db:down": "docker compose down"
+    "db:down": "docker compose down",
+    "db:migrate": "npm run db:migrate -w apps/api --",
+    "db:studio": "npm run db:studio -w apps/api --"
+  },
+  "overrides": {
+    "effect": "^3.22.5"
   }
 }

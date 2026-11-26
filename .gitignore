@@ -8,6 +8,9 @@ build/
 out/
 *.tsbuildinfo
 
+# Client gerado pelo Prisma (recriado pelo postinstall / npm run db:generate)
+apps/api/src/generated/
+
 # Testes
 coverage/
 

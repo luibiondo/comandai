@@ -1,0 +1,184 @@
+// Schema do banco do Comandaí.
+//
+// Convenções:
+// - Models em PascalCase e campos em camelCase (inglês); no Postgres, tabelas e colunas em snake_case.
+// - Multi-tenant: toda tabela de negócio tem `restaurantId`. O isolamento entre restaurantes
+//   é responsabilidade da camada de serviço (toda query filtra por `restaurantId`).
+// - IDs são UUID v7 (ordenáveis por tempo). Como o client pode gerar o próprio ID,
+//   o app mobile consegue criar registros offline e sincronizar depois sem colisão.
+// - Valores monetários em centavos (`Int`) para evitar erro de arredondamento.
+
+generator client {
+  provider               = "prisma-client"
+  output                 = "../src/generated/prisma"
+  runtime                = "nodejs"
+  moduleFormat           = "esm"
+  generatedFileExtension = "ts"
+  importFileExtension    = "js"
+  previewFeatures        = ["partialIndexes"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  ADMIN // caixa / dono (portal web)
+  EMPLOYEE // garçom (app mobile)
+}
+
+enum TabStatus {
+  OPEN
+  CLOSED
+  CANCELED
+}
+
+model Restaurant {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users        User[]
+  diningTables DiningTable[]
+  categories   Category[]
+  products     Product[]
+  tabs         Tab[]
+  tabItems     TabItem[]
+
+  @@map("restaurants")
+}
+
+/// Usuário do sistema. Pertence a um único restaurante.
+/// O e-mail é único no sistema todo para o login não precisar informar o restaurante.
+model User {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  restaurantId String   @map("restaurant_id") @db.Uuid
+  name         String
+  /// Sempre salvo em minúsculas (normalizado na camada de serviço).
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         UserRole
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  restaurant    Restaurant @relation(fields: [restaurantId], references: [id])
+  openedTabs    Tab[]      @relation("TabOpenedBy")
+  closedTabs    Tab[]      @relation("TabClosedBy")
+  createdItems  TabItem[]  @relation("TabItemCreatedBy")
+  canceledItems TabItem[]  @relation("TabItemCanceledBy")
+
+  @@index([restaurantId])
+  @@map("users")
+}
+
+/// Mesa do salão.
+model DiningTable {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  restaurantId String   @map("restaurant_id") @db.Uuid
+  number       Int
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+  tabs       Tab[]
+
+  @@unique([restaurantId, number])
+  @@map("dining_tables")
+}
+
+model Category {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  restaurantId String   @map("restaurant_id") @db.Uuid
+  name         String
+  sortOrder    Int      @default(0) @map("sort_order")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+  products   Product[]
+
+  @@unique([restaurantId, name])
+  @@map("categories")
+}
+
+/// Item do cardápio. Produtos já usados em comandas não são apagados: desative com `isActive`.
+model Product {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  restaurantId String   @map("restaurant_id") @db.Uuid
+  categoryId   String?  @map("category_id") @db.Uuid
+  name         String
+  description  String?
+  priceCents   Int      @map("price_cents")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+  category   Category?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  tabItems   TabItem[]
+
+  @@index([restaurantId, isActive])
+  @@index([categoryId])
+  @@map("products")
+}
+
+/// Comanda. Pode estar ligada a uma mesa ou ser avulsa (balcão, cartão individual).
+/// `number` é o número da comanda (cartão físico ou sequencial). Ele pode ser reutilizado,
+/// mas só pode existir uma comanda ABERTA com o mesmo número por restaurante.
+/// `closedAt`/`closedById` registram o encerramento, seja ele CLOSED ou CANCELED.
+model Tab {
+  id            String    @id @default(uuid(7)) @db.Uuid
+  restaurantId  String    @map("restaurant_id") @db.Uuid
+  number        Int
+  diningTableId String?   @map("dining_table_id") @db.Uuid
+  customerName  String?   @map("customer_name")
+  status        TabStatus @default(OPEN)
+  openedById    String    @map("opened_by_id") @db.Uuid
+  openedAt      DateTime  @default(now()) @map("opened_at")
+  closedById    String?   @map("closed_by_id") @db.Uuid
+  closedAt      DateTime? @map("closed_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  restaurant  Restaurant   @relation(fields: [restaurantId], references: [id])
+  diningTable DiningTable? @relation(fields: [diningTableId], references: [id])
+  openedBy    User         @relation("TabOpenedBy", fields: [openedById], references: [id])
+  closedBy    User?        @relation("TabClosedBy", fields: [closedById], references: [id])
+  items       TabItem[]
+
+  @@unique([restaurantId, number], map: "tabs_restaurant_id_number_open_key", where: raw("status = 'OPEN'"))
+  @@index([restaurantId, status])
+  @@index([diningTableId])
+  @@map("tabs")
+}
+
+/// Item lançado numa comanda. `unitPriceCents` é uma cópia do preço no momento do pedido,
+/// para que mudanças no cardápio não alterem comandas já lançadas.
+/// Itens não são apagados: o cancelamento fica registrado em `canceledAt`/`canceledById`.
+model TabItem {
+  id             String    @id @default(uuid(7)) @db.Uuid
+  restaurantId   String    @map("restaurant_id") @db.Uuid
+  tabId          String    @map("tab_id") @db.Uuid
+  productId      String    @map("product_id") @db.Uuid
+  quantity       Int
+  unitPriceCents Int       @map("unit_price_cents")
+  notes          String?
+  createdById    String    @map("created_by_id") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at")
+  canceledById   String?   @map("canceled_by_id") @db.Uuid
+  canceledAt     DateTime? @map("canceled_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id])
+  tab        Tab        @relation(fields: [tabId], references: [id])
+  product    Product    @relation(fields: [productId], references: [id])
+  createdBy  User       @relation("TabItemCreatedBy", fields: [createdById], references: [id])
+  canceledBy User?      @relation("TabItemCanceledBy", fields: [canceledById], references: [id])
+
+  @@index([restaurantId])
+  @@index([tabId])
+  @@index([productId])
+  @@map("tab_items")
+}

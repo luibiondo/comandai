@@ -78,11 +78,20 @@ Feito:
   - `apps/mobile`: só README (Flutter ainda não gerado).
   - Cada app tem um `AGENTS.md` gerado pelo framework, com dicas da versão atual. Ler antes de mexer.
   - `build`, `lint`, `test` e `test:e2e` da API passando.
+- Prisma configurado e banco modelado (`apps/api/prisma/schema.prisma`, migration `init`):
+  - **Prisma 7.10** (estável). O `latest` do npm para o CLI `prisma` aponta para um RC do Prisma 8: **não** atualizar com `@latest`.
+  - Generator `prisma-client` (ESM), client gerado em `apps/api/src/generated/prisma` (ignorado no git e recriado no `postinstall`). Importar de `../generated/prisma/client.js`.
+  - Driver adapter `@prisma/adapter-pg`. `PrismaService` global (`src/prisma/`) e `ConfigModule` lendo o `.env` da raiz.
+  - Config em `apps/api/prisma7.config.ts` (carrega o `.env` da raiz; o Prisma 7 não carrega sozinho).
+  - Models: `Restaurant`, `User`, `DiningTable` (mesa), `Category`, `Product`, `Tab` (comanda), `TabItem` (item da comanda). Tabelas/colunas em snake_case no Postgres.
+  - Decisões: IDs UUID v7 (permitem o mobile gerar IDs offline); dinheiro em centavos (`Int`); isolamento multi-tenant por `restaurantId` na camada de serviço; `TabItem.unitPriceCents` guarda o preço do momento do pedido; itens são cancelados (`canceledAt`), não apagados; e-mail de usuário único no sistema todo.
+  - Constraints no banco: só uma comanda `OPEN` por número por restaurante (índice único parcial, preview `partialIndexes`), além de CHECKs de preço ≥ 0 e quantidade > 0, que existem só na migration.
+  - `overrides` na raiz força `effect@^3.22.5` (vulnerabilidade alta no `effect` puxado pelo `@prisma/config`). Remover quando o Prisma atualizar a dependência.
 
 ## 7. Próximos passos (em ordem)
 
 1. ~~Primeiro commit e push (`chore: estrutura inicial do monorepo`).~~ Feito.
-2. Configurar Prisma em `apps/api` e **modelar o banco**: restaurante, usuário, mesa, comanda, item da comanda, produto (e categoria).
+2. ~~Configurar Prisma em `apps/api` e **modelar o banco**: restaurante, usuário, mesa, comanda, item da comanda, produto (e categoria).~~ Feito.
 3. Auth (JWT + papéis) e Swagger/OpenAPI.
 4. Gerar o projeto Flutter em `apps/mobile`.
 5. Definir MVP: fluxo abrir comanda → lançar itens → fechar comanda; CRUD de produtos no admin.

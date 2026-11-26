@@ -29,11 +29,14 @@ Requisitos: Node 22+ (`nvm use`), npm, Docker.
 npm install          # instala todos os workspaces
 cp .env.example .env # ajuste os valores
 npm run db:up        # sobe o Postgres 17
+npm run db:migrate   # aplica as migrations do Prisma
 npm run dev:api      # http://localhost:3001
 npm run dev:web      # http://localhost:3000
 ```
 
-Outros scripts: `npm run build`, `npm run lint`, `npm test`, `npm run db:down`.
+Outros scripts: `npm run build`, `npm run lint`, `npm test`, `npm run db:studio`, `npm run db:down`.
+
+Para alterar o banco, edite `apps/api/prisma/schema.prisma` e rode `npm run db:migrate -- --name <descricao>`.
 
 > Gerenciador de pacotes: **npm** (workspaces). Não use pnpm nem yarn.
 
